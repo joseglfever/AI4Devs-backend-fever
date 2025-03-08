@@ -3,6 +3,10 @@ import { validateCandidateData } from '../validator';
 import { Education } from '../../domain/models/Education';
 import { WorkExperience } from '../../domain/models/WorkExperience';
 import { Resume } from '../../domain/models/Resume';
+import { Application } from '../../domain/models/Application';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export const addCandidate = async (candidateData: any) => {
     try {
@@ -61,5 +65,74 @@ export const findCandidateById = async (id: number): Promise<Candidate | null> =
     } catch (error) {
         console.error('Error al buscar el candidato:', error);
         throw new Error('Error al recuperar el candidato');
+    }
+};
+
+export const updateCandidateInterviewStage = async (
+    candidateId: number,
+    applicationId: number,
+    interviewStepId: number
+): Promise<any> => {
+    try {
+        // Verificar que el candidato exista
+        const candidate = await Candidate.findOne(candidateId);
+        if (!candidate) {
+            return null;
+        }
+
+        // Verificar que la aplicación exista y pertenezca al candidato
+        const applicationExists = await prisma.application.findFirst({
+            where: {
+                id: applicationId,
+                candidateId: candidateId
+            }
+        });
+
+        if (!applicationExists) {
+            return null;
+        }
+
+        // Verificar que el paso de entrevista exista
+        const interviewStepExists = await prisma.interviewStep.findUnique({
+            where: {
+                id: interviewStepId
+            }
+        });
+
+        if (!interviewStepExists) {
+            return null;
+        }
+
+        // Actualizar el paso de entrevista actual
+        const updatedApplication = await prisma.application.update({
+            where: {
+                id: applicationId
+            },
+            data: {
+                currentInterviewStep: interviewStepId
+            },
+            include: {
+                interviewStep: {
+                    select: {
+                        name: true
+                    }
+                },
+                position: {
+                    select: {
+                        title: true
+                    }
+                }
+            }
+        });
+
+        return {
+            candidateId,
+            applicationId,
+            positionTitle: updatedApplication.position.title,
+            newStage: updatedApplication.interviewStep.name
+        };
+    } catch (error) {
+        console.error('Error updating candidate interview stage:', error);
+        throw error;
     }
 };
